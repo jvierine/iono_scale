@@ -57,15 +57,12 @@ class random_shift_data(tf.keras.utils.Sequence):
             else:
                 scale_out[i,:]=self.scaling[imi[i],:]
                     
-        if self.prob:
-            scale_out[scale_out>0.0]=1.0
-            
         img_out.shape=(img_out.shape[0],img_out.shape[1],img_out.shape[2],1)
         return(img_out,scale_out)
 
 
     
-def get_images(dirname="./sod_ski",region="all"):
+def get_images(dirname="./sod_ski",region="all",prob=False):
     fl=glob.glob("%s/iono*.png"%(dirname))
     n.random.shuffle(fl)
 #    print(len(fl))
@@ -88,8 +85,35 @@ def get_images(dirname="./sod_ski",region="all"):
                 if s0[1] < 1.0 or s0[3]< 1.0:
                     ok=False
                 s=n.array([s0[1],s0[3]],dtype=n.float32)
-            else:
-                s
+                
+            if prob:
+                # only okay if E or F region is present in labels.
+                # otherwise, we shouldn't train with this image, as the network will be confused
+                ok=True
+                s=n.zeros(2)
+                # only hf or fo2
+                if s0[1] > 1.0 and s0[3] < 1.0:
+                    ok=False
+                if s0[1] < 1.0 and s0[3] > 1.0:
+                    ok=False
+
+                # only hf or fo2
+                if s0[0] < 1.0 and s0[2] > 1.0:
+                    ok=False
+                if s0[0] > 1.0 and s0[2] < 1.0:
+                    ok=False
+                    
+                # both he and fe
+                if s0[1] > 1.0 and s0[3] > 1.0:
+                    # we have an e-region
+                    ok=True
+                    s[1]=1.0
+
+                # both hf and fe
+                if s0[0] > 1.0 and s0[2] > 1.0:
+                    # we have an f-region
+                    ok=True
+                    s[0]=1.0
                     
             if ok:
                 scalings.append(s)
@@ -101,7 +125,7 @@ def get_images(dirname="./sod_ski",region="all"):
 def get_ionogram_data(dirname="./sod_ski",bs=64,N=10,x_width=50,shift=True,fr0=0.0,fr1=1.0,
                       prob=False,
                       region="all"):
-    im,sc=get_images(dirname=dirname,region=region)
+    im,sc=get_images(dirname=dirname,region=region,prob=prob)
     return(random_shift_data(im,sc,batch_size=bs,N=N,x_width=x_width,shift=shift,fr0=fr0,fr1=fr1,prob=prob))
 
 if __name__ == "__main__":
