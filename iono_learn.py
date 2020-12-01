@@ -11,7 +11,7 @@ import ionogram_data as igd
 import time
 from tensorflow.python.keras.callbacks import TensorBoard
 
-def teach_network(n_type="label",bs=64, n_epochs=2,N=10):
+def teach_network(n_type="label",bs=64, n_epochs=2,N=10,plot=True):
     # scalings:
     # fof2, fe, h'mf, h'e
     if n_type == "label":
@@ -78,29 +78,30 @@ def teach_network(n_type="label",bs=64, n_epochs=2,N=10):
 
     model.save("model/%s"%(n_type))
 
-    n_input=len(validation_dataset)
-    for i in range(n_input):
-        im,sc=validation_dataset[i]
-        pr=model.predict(im)
-        for j in range(bs):
-            print(pr[j,:])
-            plt.imshow(im[j,:,:])
-            if n_type == "f_scale" or n_type == "e_scale":
-                plt.axvline(pr[j,0],color="red")
-                plt.axhline(pr[j,1],color="red")
-            if n_type == "label":
-                label_str=""
-                if pr[j,0]> 0.8:
-                    label_str+="F "
-                if pr[j,1]> 0.8:
-                    label_str+="E "
-                plt.title(label_str)
-            plt.show()
+    if plot:
+        n_input=len(validation_dataset)
+        for i in range(n_input):
+            im,sc=validation_dataset[i]
+            pr=model.predict(im)
+            for j in range(bs):
+                print(pr[j,:])
+                plt.imshow(im[j,:,:])
+                if n_type == "f_scale" or n_type == "e_scale":
+                    plt.axvline(pr[j,0],color="red")
+                    plt.axhline(pr[j,1],color="red")
+                if n_type == "label":
+                    label_str=""
+                    if pr[j,0]> 0.8:
+                        label_str+="F "
+                    if pr[j,1]> 0.8:
+                        label_str+="E "
+                    plt.title(label_str)
+                plt.show()
             
 # three networks to solve all problems
 # 1) determine the presence of F and E traces
-#teach_network(n_type="label",bs=64, n_epochs=4, N=20)
+teach_network(n_type="label",bs=64, n_epochs=10, N=20,plot=False)
 # 2) scale f-region trace h'f and fof2
-teach_network(n_type="f_scale",bs=32, n_epochs=20,N=20)
+teach_network(n_type="f_scale",bs=32, n_epochs=20,N=20,plot=False)
 # 3) scale e-region trace h'e and fe
-#teach_network(n_type="e_scale",bs=32, n_epochs=20,N=20)
+teach_network(n_type="e_scale",bs=32, n_epochs=20,N=20,plot=False)
