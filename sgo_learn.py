@@ -30,6 +30,10 @@ def teach_network(n_type="label",bs=32, n_epochs=2,plot=True):
         # find ionograms with an f2-region
         dataset=igd.sgo_normalized_data(prob=False,batch_size=bs,fr0=0.0,fr1=0.8,output_type="e")
         validation_dataset=igd.sgo_normalized_data(prob=False,batch_size=bs,fr0=0.8,fr1=1.0,output_type="e")
+    if n_type == "f1":
+        # find ionograms with an f1-region
+        dataset=igd.sgo_normalized_data(prob=False,batch_size=bs,fr0=0.0,fr1=0.8,output_type="f1")
+        validation_dataset=igd.sgo_normalized_data(prob=False,batch_size=bs,fr0=0.8,fr1=1.0,output_type="f1")
 
     
     # multi-gpu
@@ -58,8 +62,8 @@ def teach_network(n_type="label",bs=32, n_epochs=2,plot=True):
         ])
         if n_type == "label":
             model.add(tf.keras.layers.Dense(dataset.n_pars,activation="sigmoid"))
-        elif n_type == "f_scale" or n_type == "e_scale":
-            model.add(tf.keras.layers.Dense(2,activation="relu"))
+        elif n_type == "f2" or n_type == "es" or n_type == "e" or n_type=="f1":
+            model.add(tf.keras.layers.Dense(2))
         else:
             print("n_type not recognized. exiting")
             exit(0)
@@ -88,11 +92,12 @@ def teach_network(n_type="label",bs=32, n_epochs=2,plot=True):
             
 # three networks to solve all problems
 # 1) determine the presence of F and E traces
-#teach_network(n_type="label",bs=32, n_epochs=10)
+teach_network(n_type="label",bs=32, n_epochs=5)
 # 2) scale f-region trace h'f and fof2
-teach_network(n_type="f2",bs=32, n_epochs=10,plot=False)
+teach_network(n_type="f2",bs=32, n_epochs=5,plot=False)
 # 3) scale e-region trace h'es and fes
-#teach_network(n_type="es",bs=32, n_epochs=10,plot=False)
+teach_network(n_type="es",bs=32, n_epochs=5,plot=False)
 # 4) scale e-region trace h'e and fe
-#teach_network(n_type="e",bs=32, n_epochs=10,plot=False)
-
+teach_network(n_type="e",bs=32, n_epochs=5,plot=False)
+# 5) scale f1-region trace h'f and fof1
+teach_network(n_type="f1",bs=32, n_epochs=5,plot=False)

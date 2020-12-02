@@ -66,8 +66,12 @@ class sgo_ionograms:
             
         for j in range(igd.shape[1]):
 
-            noise_mean=n.nanmedian(igd[:,j])
-            noise_pwr=n.nanstd(igd[:,j])
+
+
+            noise_sort=n.sort(n.copy(igd[:,j]))
+            noise_pwr=n.nanstd(noise_sort[0:(int(0.5*len(noise_sort)))])
+            noise_mean=n.nanmedian(noise_sort[0:(int(0.5*len(noise_sort)))])
+#            noise_pwr=n.nanstd(igd[:,j])
 #            noise_pwr=n.nanmedian(n.abs(igd[:,j]-noise_mean))
             igd[:,j]=(igd[:,j]-noise_mean)/noise_pwr
 
@@ -189,24 +193,26 @@ class sgo_normalized_data(tf.keras.utils.Sequence):
         self.prob=prob
         self.par_fl=[]
         self.img_fl=[]
+        # fmin, h'Es, foEs, Type Es, fbEs h'E foE h'F foF1 foF2 fxI M(3000)F2
+                           # 0     1   2 3 4 5     6 7     8 9 10 11
+        self.factor=n.array([1.0,100.0,1,1,1,100.0,1,100.0,1,1,1,1],dtype=n.float32)
 #        self.par_ids=par_ids
-        if prob:
-            self.n_pars=4 # es e and f?
         
         for f in fl:
             prefix=re.search("(.*/.*).h5",f).group(1)
             img_fname="%s.png"%(prefix)
             if os.path.exists(img_fname):
-
                 if output_type=="all":
                     self.par_fl.append(f)
                     self.img_fl.append(img_fname)
+                    self.n_pars=12
+                    self.par_ids=n.arange(12,dtype=n.int)
                 else:
                     hp=h5py.File(f,"r")
                     scaling=n.copy(hp["scaling"].value)
                     hp.close()
                     if output_type=="f2":
-                        if scaling[7] > 0 and scaling[9]> 0:
+                        if scaling[7] > 0.1 and scaling[9]> 0.1:
                             # only ones that have foF2 and hf
                             self.par_fl.append(f)
                             self.img_fl.append(img_fname)
@@ -214,18 +220,27 @@ class sgo_normalized_data(tf.keras.utils.Sequence):
                             self.n_pars=2
                     if output_type=="es":
                         # only ones that have Es (fes and h'e)
-                        if scaling[1] > 0 and scaling[2]> 0:
+                        if scaling[1] > 0.1 and scaling[2]> 0.1:
                             self.par_fl.append(f)
                             self.img_fl.append(img_fname)
                             self.par_ids=n.array([1,2],dtype=n.int)
                             self.n_pars=2
                     if output_type=="e":
                         # only ones that have fe and h'e
-                        if scaling[5] > 0 and scaling[6]> 0:
+                        if scaling[5] > 0.1 and scaling[6]> 0.1:
                             self.par_fl.append(f)
                             self.img_fl.append(img_fname)
                             self.par_ids=n.array([5,6],dtype=n.int)
                             self.n_pars=2
+                    if output_type=="f1":
+                        # only ones that have h'f and fof1
+                        if scaling[7] > 0.1 and scaling[8]> 0.1:
+                            self.par_fl.append(f)
+                            self.img_fl.append(img_fname)
+                            self.par_ids=n.array([7,8],dtype=n.int)
+                            self.n_pars=2
+        if prob:
+            self.n_pars=4 # es, e, f1, f2
 
         self.n_im=len(self.par_fl)
         print("found %d files"%(self.n_im))
@@ -286,7 +301,7 @@ class sgo_normalized_data(tf.keras.utils.Sequence):
                 if h["scaling_p"].value[7] > 0 or h["scaling_p"].value[9] > 0:
                     scales[i,3]=1.0
             else:
-                scales[i,:]=h["scaling"].value[self.par_ids]
+                scales[i,:]=h["scaling"].value[self.par_ids]/self.factor[self.par_ids]
                     
         imgs.shape=(imgs.shape[0],imgs.shape[1],imgs.shape[2],1)
         return(imgs,scales)
@@ -294,8 +309,8 @@ class sgo_normalized_data(tf.keras.utils.Sequence):
 
             
 if __name__ == "__main__":
- #   preprocess(plot=False)
-#    exit(0)
+    preprocess(plot=False)
+    exit(0)
     d=sgo_normalized_data(prob=False)
     print(d.im_shape)
     imgs,scales=d[0]
