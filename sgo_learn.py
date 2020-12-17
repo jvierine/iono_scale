@@ -42,28 +42,34 @@ def teach_network(n_type="label",bs=32, n_epochs=2,plot=True):
     with ms.scope():
         model = tf.keras.models.Sequential([
             #(262, 295)(174, 295)
-            tf.keras.layers.Conv2D(64, (3, 3), strides=(1,1), activation='relu', input_shape=(174, 295,1)),
+            tf.keras.layers.Conv2D(32, (3, 3), strides=(1,1), activation='relu', input_shape=(174, 295,1)),
+            tf.keras.layers.MaxPooling2D((2,2)),                        
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),            
             tf.keras.layers.MaxPooling2D((2,2)),
             tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
             tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
             tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
             tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
             tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),                                    
             tf.keras.layers.MaxPooling2D((2,2)),
             tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
             tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
-            tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),            
-            tf.keras.layers.MaxPooling2D((2,2)),
-            tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
-            tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),                        
             tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(1024,activation="relu"),
             tf.keras.layers.Dense(1024,activation="relu"),
         ])
         if n_type == "label":
             model.add(tf.keras.layers.Dense(dataset.n_pars,activation="sigmoid"))
-        elif n_type == "f2" or n_type == "es" or n_type == "e" or n_type=="f1":
-            model.add(tf.keras.layers.Dense(2))
+        elif n_type == "f2" or n_type == "es" or n_type == "e":
+            model.add(tf.keras.layers.Dense(1))
+        elif n_type=="f1":
+            model.add(tf.keras.layers.Dense(1))         #  h'f fof1 fof2
         else:
             print("n_type not recognized. exiting")
             exit(0)
@@ -75,29 +81,35 @@ def teach_network(n_type="label",bs=32, n_epochs=2,plot=True):
     #
     if n_type == "label":
         model.compile(loss="binary_crossentropy",
+                      metrics=["accuracy"],
                       optimizer=tf.keras.optimizers.Adam())
     else:
         model.compile(loss="mse",
+                      metrics=["accuracy"],                      
                       optimizer=tf.keras.optimizers.Adam())
         
     model.summary()
 
+    model_fname="sgo_model/%s"%(n_type)
+
+    monitor="val_loss"
+    model_checkpoint = tf.keras.callbacks.ModelCheckpoint(filepath=model_fname,monitor=monitor,save_best_only=True)
     history = model.fit(dataset,
                         batch_size=bs,
                         validation_data=validation_dataset,
-                        epochs=n_epochs)
+                        epochs=n_epochs,
+                        callbacks=[model_checkpoint])
 
-    model.save("sgo_model/%s"%(n_type))
-
+#    model.save()
             
 # three networks to solve all problems
 # 1) determine the presence of F and E traces
-teach_network(n_type="label",bs=32, n_epochs=5)
+teach_network(n_type="label",bs=32, n_epochs=20)
 # 2) scale f-region trace h'f and fof2
-teach_network(n_type="f2",bs=32, n_epochs=5,plot=False)
+teach_network(n_type="f2",bs=32, n_epochs=20,plot=False)
 # 3) scale e-region trace h'es and fes
-teach_network(n_type="es",bs=32, n_epochs=5,plot=False)
+teach_network(n_type="es",bs=32, n_epochs=20,plot=False)
 # 4) scale e-region trace h'e and fe
-teach_network(n_type="e",bs=32, n_epochs=5,plot=False)
+teach_network(n_type="e",bs=32, n_epochs=20,plot=False)
 # 5) scale f1-region trace h'f and fof1
-teach_network(n_type="f1",bs=32, n_epochs=5,plot=False)
+teach_network(n_type="f1",bs=32, n_epochs=20,plot=False)

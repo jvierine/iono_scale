@@ -12,6 +12,11 @@ import sgo_reader as sd
 import stuffr
 import h5py
 
+
+
+
+
+
 class sgo_ionograms:
     def __init__(self,dirname="/scratch/data/juha/sgo",dec=2, prob=True, plot=False):
         self.dirname=dirname
@@ -51,6 +56,7 @@ class sgo_ionograms:
             if os.path.exists(gram_fname1):
                 return(gram_fname1)
             return None
+        
     def __getitem__(self,i):
         ionogram=sd.loadGram(fn=self.gfl[i])
         parfile=sio.loadmat(self.fl[i])
@@ -62,18 +68,15 @@ class sgo_ionograms:
             bidx=n.where(col<10)[0]
             col[bidx]=n.nanmedian(col[gidx])
             
-        igd[igd<40.0]=40.0
-            
+#        igd[igd<40.0]=40.0
+
+        # dim 0 = range dim 1 = freq
         for j in range(igd.shape[1]):
-
-
-
             noise_sort=n.sort(n.copy(igd[:,j]))
             noise_pwr=n.nanstd(noise_sort[0:(int(0.5*len(noise_sort)))])
             noise_mean=n.nanmedian(noise_sort[0:(int(0.5*len(noise_sort)))])
-#            noise_pwr=n.nanstd(igd[:,j])
-#            noise_pwr=n.nanmedian(n.abs(igd[:,j]-noise_mean))
-            igd[:,j]=(igd[:,j]-noise_mean)/noise_pwr
+#            igd[:,j]=(igd[:,j]-noise_mean)/noise_pwr
+            igd[:,j]=(igd[:,j]-noise_mean)
 
         rgs=n.linspace(ionogram["ylim"][0],ionogram["ylim"][1],num=igd.shape[0])
         freqs=n.linspace(ionogram["xlim"][0],ionogram["xlim"][1],num=igd.shape[1])
@@ -82,9 +85,11 @@ class sgo_ionograms:
         igd=igd[ridx,:]
         rgs=rgs[ridx]
         print(len(rgs))
-   
-        igd[igd>4.0]=4.0
-        igd[igd<-3.0]=-3.0
+
+        max_dB=30.0
+        min_dB=0.0
+        igd[igd>max_dB]=max_dB
+        igd[igd<min_dB]=min_dB
 
 
         igd[n.isnan(igd)]=0.0
@@ -173,6 +178,9 @@ class sgo_normalized_data(tf.keras.utils.Sequence):
                  prob=True,
                  output_type="all",
                  fr0=0.0,
+                 use_avg=True,
+                 shift=True,
+                 N=10,
                  fr1=1.0):#red)array([7,9],dtype=n.int)):
         
         # parameters
@@ -189,14 +197,21 @@ class sgo_normalized_data(tf.keras.utils.Sequence):
         fl=glob.glob("%s/*.h5"%(dirname))
         n.random.seed(0)
         n.random.shuffle(fl)
+        self.shift=shift
         self.batch_size=batch_size
         self.prob=prob
         self.par_fl=[]
         self.img_fl=[]
+        self.x_width=50
+        self.use_avg=use_avg
+        if use_avg:
+            hi=h5py.File("avg_img.h5","r")
+            self.avg_im=n.copy(hi["im"].value)
+            hi.close()
         # fmin, h'Es, foEs, Type Es, fbEs h'E foE h'F foF1 foF2 fxI M(3000)F2
                            # 0     1   2 3 4 5     6 7     8 9 10 11
         self.factor=n.array([1.0,100.0,1,1,1,100.0,1,100.0,1,1,1,1],dtype=n.float32)
-#        self.par_ids=par_ids
+        #        self.par_ids=par_ids
         
         for f in fl:
             prefix=re.search("(.*/.*).h5",f).group(1)
@@ -212,33 +227,33 @@ class sgo_normalized_data(tf.keras.utils.Sequence):
                     scaling=n.copy(hp["scaling"].value)
                     hp.close()
                     if output_type=="f2":
-                        if scaling[7] > 0.1 and scaling[9]> 0.1:
+                        if scaling[9]> 0.1:              
                             # only ones that have foF2 and hf
                             self.par_fl.append(f)
                             self.img_fl.append(img_fname)
-                            self.par_ids=n.array([7,9],dtype=n.int)
-                            self.n_pars=2
+                            self.par_ids=n.array([9],dtype=n.int)
+                            self.n_pars=1
                     if output_type=="es":
                         # only ones that have Es (fes and h'e)
-                        if scaling[1] > 0.1 and scaling[2]> 0.1:
+                        if scaling[2]> 0.1:
                             self.par_fl.append(f)
                             self.img_fl.append(img_fname)
-                            self.par_ids=n.array([1,2],dtype=n.int)
-                            self.n_pars=2
+                            self.par_ids=n.array([2],dtype=n.int)
+                            self.n_pars=1
                     if output_type=="e":
                         # only ones that have fe and h'e
-                        if scaling[5] > 0.1 and scaling[6]> 0.1:
+                        if scaling[6]> 0.1:
                             self.par_fl.append(f)
                             self.img_fl.append(img_fname)
-                            self.par_ids=n.array([5,6],dtype=n.int)
-                            self.n_pars=2
+                            self.par_ids=n.array([6],dtype=n.int)
+                            self.n_pars=1
                     if output_type=="f1":
                         # only ones that have h'f and fof1
-                        if scaling[7] > 0.1 and scaling[8]> 0.1:
+                        if scaling[8]> 0.1:
                             self.par_fl.append(f)
                             self.img_fl.append(img_fname)
-                            self.par_ids=n.array([7,8],dtype=n.int)
-                            self.n_pars=2
+                            self.par_ids=n.array([8],dtype=n.int)
+                            self.n_pars=1
         if prob:
             self.n_pars=4 # es, e, f1, f2
 
@@ -246,21 +261,31 @@ class sgo_normalized_data(tf.keras.utils.Sequence):
         print("found %d files"%(self.n_im))
         im=imageio.imread(self.img_fl[0])
         self.im_shape=im.shape
+        
         h=h5py.File(self.par_fl[0],"r")
         self.ylim=h["ylim"].value
         self.xlim=h["xlim"].value
+        self.df=(self.xlim[1]-self.xlim[0])/float(self.im_shape[1])
         h.close()
+        
         self.fr0=fr0
         self.fr1=fr1
+        
+        self.N=N
 
         self.max_idx=int(self.fr1*self.n_im)
         self.min_idx=int(self.fr0*self.n_im)
+
+        self.len0=int((self.fr1-self.fr0)*self.n_im/float(self.batch_size))
         
     def __len__(self):
-        return(int((self.fr1-self.fr0)*self.n_im/float(self.batch_size)))
+        return(self.len0*self.N)
+#        return(int(self.N*(self.fr1-self.fr0)*self.n_im/float(self.batch_size)))
     
     def __getitem__(self,idx):
-        i0=self.min_idx + self.batch_size*idx
+        idx_mod=idx%self.len0
+        
+        i0=self.min_idx + self.batch_size*idx_mod
 #        i0=self.batch_size*idx
         
         imgs=n.zeros([self.batch_size,self.im_shape[0],self.im_shape[1]],dtype=n.float32)
@@ -268,70 +293,119 @@ class sgo_normalized_data(tf.keras.utils.Sequence):
         
         for i in range(self.batch_size):
             fi=(i0+i)%self.n_im
-            fim=n.array(imageio.imread(self.img_fl[fi]),dtype=n.float32)/255.0
-#            fim=fim-n.median(fim)
- #           fim[fim<0]=0.0
-  #          fim=fim/n.nanmax(fim)
-   #         fim[n.isnan(fim)]=0.0
-            imgs[i,:,:]=fim
+            if self.use_avg:
+                fim=(n.array(imageio.imread(self.img_fl[fi]),dtype=n.float32)-self.avg_im)/255.0
+            else:
+                fim=n.array(imageio.imread(self.img_fl[fi]),dtype=n.float32)/255.0
+            fim[fim<0]=0.0
+
             h=h5py.File(self.par_fl[fi],"r")
+            true_scale=n.copy(h["scaling"].value)
             
-        # parameters
-        # fmin, h'Es, foEs Type Es, fbEs h'E foE h'F foF1 foF2 fxI M(3000)F2
-        # 0     1     2    3         4    5  6   7   8    9    10  11
-        #
-        # is there an F2-region?
-        # if 6 or 9
-        # is there f1
-        # if 8
-        # is there an Es
-        # if 1 or 2 or 4
-        # is there an E-region
-        # if 5 or 6
-        #
-            
+            if self.shift:
+                xi=int(n.random.rand(1)*self.x_width-self.x_width/2.0)
+
+                if true_scale[2] != 0:
+                    if (true_scale[2]+self.df*xi < 0.5) or (true_scale[2]+self.df*xi > 16.0):
+                        xi=0
+                if true_scale[4] != 0:
+                    if (true_scale[4]+self.df*xi < 0.5) or (true_scale[4]+self.df*xi > 16.0):
+                        xi=0
+                if true_scale[6] != 0:
+                    if (true_scale[6]+self.df*xi) < 0.5 or (true_scale[6]+self.df*xi > 16.0):
+                        xi=0
+                if true_scale[9] != 0:
+                    if (true_scale[9]+self.df*xi) < 0.5 or (true_scale[9]+self.df*xi) > 16.0:
+                        xi=0
+                if true_scale[8] != 0:
+                    if true_scale[8]+self.df*xi < 0.5 or true_scale[8]+self.df*xi >16.0:
+                        xi=0
+
+
+ #               print(xi)
+                fim=n.roll(fim,xi,axis=1)
+
+                if xi > 0:
+                    for xii in range(xi):
+                        fim[:,xii]=0.0
+                else:
+                    for xii in range(n.abs(xi)):
+                        fim[:,fim.shape[1]-xii-1]=0.0
+                        
+                imgs[i,:,:]=fim
+#                print(self.df*xi)
+                if true_scale[2] != 0:
+                    true_scale[2]+=self.df*xi
+                if true_scale[4] != 0:
+                    true_scale[4]+=self.df*xi
+                if true_scale[6] != 0:
+                    true_scale[6]+=self.df*xi
+                if true_scale[9] != 0:
+                    true_scale[9]+=self.df*xi
+                if true_scale[8] != 0:
+                    true_scale[8]+=self.df*xi
+            else:
+                xi=0
+                imgs[i,:,:]=fim
+                
+            # parameters
+            # fmin, h'Es, foEs Type Es, fbEs h'E foE h'F foF1 foF2 fxI M(3000)F2
+            # 0     1     2    3         4    5  6   7   8    9    10  11
+            #
+            # is there an F2-region?
+            # if 6 or 9
+            # is there f1
+            # if 8
+            # is there an Es
+            # if 1 or 2 or 4
+            # is there an E-region
+            # if 5 or 6
+            #
             if self.prob:
                 # 0 = Es? 1 = E 3 = F1 4=F2
-                if h["scaling_p"].value[1] > 0 or h["scaling_p"].value[2] > 0 or h["scaling_p"].value[4] > 0:
+                if h["scaling_p"].value[2] > 0.1:
                     scales[i,0]=1.0
-                if h["scaling_p"].value[5] > 0 or h["scaling_p"].value[6] > 0:
+                if h["scaling_p"].value[6] > 0.1:
                     scales[i,1]=1.0
-                if h["scaling_p"].value[8] > 0:
+                if h["scaling_p"].value[8] > 0.1:
                     scales[i,2]=1.0
-                if h["scaling_p"].value[7] > 0 or h["scaling_p"].value[9] > 0:
+                if h["scaling_p"].value[9] > 0.1:
                     scales[i,3]=1.0
             else:
-                scales[i,:]=h["scaling"].value[self.par_ids]/self.factor[self.par_ids]
+                scales[i,:]=true_scale[self.par_ids]/self.factor[self.par_ids]
                     
         imgs.shape=(imgs.shape[0],imgs.shape[1],imgs.shape[2],1)
         return(imgs,scales)
 
-
-            
 if __name__ == "__main__":
-    preprocess(plot=False)
-    exit(0)
+#    preprocess(plot=False)
+ #   exit(0)
     d=sgo_normalized_data(prob=False)
     print(d.im_shape)
-    imgs,scales=d[0]
-    for i in range(imgs.shape[0]):
-#        imgs[i,:,:,0]=imgs[i,:,:,0]-n.median(imgs[i,:,:,0])
-
-        plt.imshow(imgs[i,:,:,0],extent=(d.xlim[0],d.xlim[1],d.ylim[0],d.ylim[1]),aspect="auto",vmin=0)
-        plt.colorbar()
-
-        # 
-        # parameters
-        # fmin, h'Es, foEs Type Es, fbEs h'E foE h'F foF1 foF2 fxI M(3000)F2
-        # 0     1     2    3         4    5  6   7   8    9    10  11
-        #
-        plt.axvline(scales[i,9],color="red")
-        plt.axhline(scales[i,7],color="red")        
-        plt.axvline(scales[i,4],color="green")
-        plt.axvline(scales[i,6],color="blue")
-        plt.axvline(scales[i,8],color="white")
-#        plt.axvline(scales[i,9],color="black")                
-        plt.show()
+    for j in range(len(d)):
+        imgs,scales=d[j]
+        for i in range(imgs.shape[0]):
+            #        imgs[i,:,:,0]=imgs[i,:,:,0]-n.median(imgs[i,:,:,0])
+            print(imgs.shape)
+            print(scales[i,:])
+            plt.imshow(imgs[i,:,:,0],extent=(d.xlim[0],d.xlim[1],d.ylim[0],d.ylim[1]),aspect="auto",vmin=0)
+            plt.colorbar()
+            
+            # 
+            # parameters
+            # fmin, h'Es, foEs Type Es, fbEs h'E foE h'F foF1 foF2 fxI M(3000)F2
+            # 0     1     2    3         4    5  6   7   8    9    10  11
+            #
+            plt.axvline(scales[i,9],color="red")
+            plt.axvline(scales[i,8],color="red")
+            plt.axhline(scales[i,7]*100.0,color="red")                    
+            plt.axvline(scales[i,4],color="blue")
+            plt.axhline(scales[i,1]*100.0,color="blue")
+            plt.axvline(scales[i,2],color="blue")                        
+            plt.axvline(scales[i,6],color="blue")
+            #        plt.axvline(scales[i,8],color="white")
+            #        plt.axvline(scales[i,9],color="black")                
+            plt.show()
 
 
 #(262, 295)
