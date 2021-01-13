@@ -10,6 +10,7 @@ from tensorflow.keras.regularizers import l2
 import ionogram_data as igd
 
 import time
+import os
 from tensorflow.python.keras.callbacks import TensorBoard
 
 def teach_network(n_type="label",
@@ -38,26 +39,28 @@ def teach_network(n_type="label",
         model = tf.keras.models.Sequential([
             tf.keras.layers.Conv2D(32, (3, 3), strides=(1,1), activation='relu', input_shape=(200, 498,1)),
             tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
-            tf.keras.layers.BatchNormalization(),                        
+#            tf.keras.layers.Dropout(0.1), # 0 = no dropouts 1 = all drops out            
+   #         tf.keras.layers.BatchNormalization(),                        
             tf.keras.layers.MaxPooling2D((2,2)),
-            tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
-            tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
-#            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
-            tf.keras.layers.BatchNormalization(),                                            
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+  #          tf.keras.layers.BatchNormalization(),                                            
+            tf.keras.layers.MaxPooling2D((2,2)),
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),            
+#            tf.keras.layers.BatchNormalization(),
             tf.keras.layers.MaxPooling2D((2,2)),
             tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
             tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
             tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
             tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),            
-            tf.keras.layers.BatchNormalization(),                                                               tf.keras.layers.MaxPooling2D((2,2)),
-            tf.keras.layers.Conv2D(256, (3, 3), activation='relu'),
-            tf.keras.layers.Conv2D(256, (3, 3), activation='relu'),
-            tf.keras.layers.Conv2D(256, (3, 3), activation='relu'),
-            tf.keras.layers.Conv2D(256, (3, 3), activation='relu'),            
-            tf.keras.layers.BatchNormalization(),
+#            tf.keras.layers.BatchNormalization(),
             tf.keras.layers.MaxPooling2D((2,2)),
-            tf.keras.layers.Conv2D(512, (3, 3), activation='relu'),
-            tf.keras.layers.Conv2D(512, (3, 3), activation='relu'),                        
+            tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
+#            tf.keras.layers.BatchNormalization(),            
             tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(1024,activation="relu"),
             #    tf.keras.layers.Dropout(0.1), # 0 = no dropouts 1 = all drops out
@@ -73,50 +76,44 @@ def teach_network(n_type="label",
             print("n_type not recognized. exiting")
             exit(0)
 
-    # Filippo's input:
-    # - keras mask loss
-    # - batch normalization!
-    # - kernel regularization
-    # - multi-head
-    # - custom loss function
-    # - keras callback save best model
-    # - subset
-    # - be more patient (50 epochs or more)
-    #
-    # probability of feature in image: 'binary_crossentropy'
-    #
-    # regression: "mse"
-    #
     if n_type == "label":
         model.compile(loss="binary_crossentropy",
-#                      metrics=["accuracy"],
                       optimizer=tf.keras.optimizers.Adam())
     else:
         model.compile(loss="mse",
- #                     metrics=[tf.keras.metrics.RootMeanSquaredError()],
                       optimizer=tf.keras.optimizers.Adam())
         
     model.summary()
-
+    
+    model_fname="model3/%s"%(n_type)
+    os.system("rm -Rf %s"%(model_fname))
+    monitor="val_loss"
+    model_checkpoint = tf.keras.callbacks.ModelCheckpoint(filepath=model_fname,
+                                                          monitor=monitor,
+                                                          save_best_only=True)
+            
     history = model.fit(dataset,
                         batch_size=bs,
                         validation_data=validation_dataset,
-                        epochs=n_epochs
-#                        callbacks= [tf.keras.callbacks.TensorBoard(log_dir="log",histogram_freq=1)]
-    )
+                        epochs=n_epochs,
+                        callbacks=[model_checkpoint])
 
-    model.save("model3/%s"%(n_type))
 
-teach_network(n_type="label",bs=32, n_epochs=5, N=10)    
+    
+teach_network(n_type="label",bs=32, n_epochs=10, N=50)
+
+teach_network(n_type="f_scale",bs=32, n_epochs=10,N=50)
+teach_network(n_type="e_scale",bs=32, n_epochs=10,N=50)
             
 # three networks to solve all problems
 # 1) determine the presence of F and E traces
-teach_network(n_type="f_scale",bs=32, n_epochs=5,N=10)
+
+
+
 
 
 # 2) scale f-region trace h'f and fof2
 
 # 3) scale e-region trace h'e and fe
-teach_network(n_type="e_scale",bs=32, n_epochs=5,N=10)
 
 

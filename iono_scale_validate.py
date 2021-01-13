@@ -102,12 +102,17 @@ def validate_e(plot=False):
                 plt.imshow(im[imi,:,:],
                            extent=[n.min(img_freqs),n.max(img_freqs),n.min(img_rgs),n.max(img_rgs)],
                            aspect="auto")
-                
-                plt.axhline(rint(f_pr[imi,1]))
-                plt.axvline(fint(f_pr[imi,0]))
+                plt.axhline(rint(f_pr[imi,1]),color="red",alpha=0.5,label="Predicted")
+                plt.axvline(fint(f_pr[imi,0]),color="red",alpha=0.5)
+                plt.axhline(rint(sc[imi,1]),color="green",alpha=0.5,label="True")
+                plt.axvline(fint(sc[imi,0]),color="green",alpha=0.5)
+                plt.legend()
                 plt.title("ferr %1.2f kHz herr %1.2f (km)"%(ferr,rerr))
+                plt.xlabel("Frequency (MHz)")
+                plt.ylabel("Virtual range (km)")                
                 plt.colorbar()
                 plt.show()
+                
     f_errs=n.array(f_errs)
     h_errs=n.array(h_errs)    
     rmse_f=n.sqrt(n.mean(f_errs**2.0))
@@ -155,8 +160,11 @@ def validate_label(plot=False,p_ok=0.8):
     e_acc=n.sum(e_ok)/float(len(e_ok))
     print("Accuracy F %1.2f E %1.2f"%(f_acc,e_acc))
 
-validate_f(plot=True)    
-#validate_label(plot=False)
-#validate_e()
+#validate_e(plot=False)    
+#validate_f(plot=False)        
+validate_label(plot=False)    
+
+
+
 
 
