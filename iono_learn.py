@@ -5,13 +5,18 @@ from tensorflow.keras import Model
 import h5py
 import numpy as n
 import matplotlib.pyplot as plt
+from tensorflow.keras.regularizers import l2
 
 import ionogram_data as igd
 
 import time
 from tensorflow.python.keras.callbacks import TensorBoard
 
-def teach_network(n_type="label",bs=64, n_epochs=2,N=10,plot=True):
+def teach_network(n_type="label",
+                  bs=64,
+                  n_epochs=2,
+                  N=1):
+
     # scalings:
     # fof2, fe, h'mf, h'e
     if n_type == "label":
@@ -31,32 +36,52 @@ def teach_network(n_type="label",bs=64, n_epochs=2,N=10,plot=True):
     # multi-gpu
     with ms.scope():
         model = tf.keras.models.Sequential([
-            tf.keras.layers.Conv2D(64, (3, 3), strides=(2,2), activation='relu', input_shape=(200, 498,1)),
+            tf.keras.layers.Conv2D(32, (3, 3), strides=(1,1), activation='relu', input_shape=(200, 498,1)),
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+            tf.keras.layers.BatchNormalization(),                        
+            tf.keras.layers.MaxPooling2D((2,2)),
+            tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+#            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+            tf.keras.layers.BatchNormalization(),                                            
             tf.keras.layers.MaxPooling2D((2,2)),
             tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
             tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
             tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
-            tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
-            tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),        
+            tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),            
+            tf.keras.layers.BatchNormalization(),                                                               tf.keras.layers.MaxPooling2D((2,2)),
+            tf.keras.layers.Conv2D(256, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(256, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(256, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(256, (3, 3), activation='relu'),            
+            tf.keras.layers.BatchNormalization(),
             tf.keras.layers.MaxPooling2D((2,2)),
-            tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
-            tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
-            tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),            
-            tf.keras.layers.MaxPooling2D((2,2)),
-            tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
-            tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(512, (3, 3), activation='relu'),
+            tf.keras.layers.Conv2D(512, (3, 3), activation='relu'),                        
             tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(1024,activation="relu"),
-            tf.keras.layers.Dense(1024,activation="relu"),
+            #    tf.keras.layers.Dropout(0.1), # 0 = no dropouts 1 = all drops out
+            #,kernel_regularizer=l2(1e-6)
+            tf.keras.layers.Dense(1024,activation="relu")
         ])
+        
         if n_type == "label":
             model.add(tf.keras.layers.Dense(2,activation="sigmoid"))
         elif n_type == "f_scale" or n_type == "e_scale":
-            model.add(tf.keras.layers.Dense(2,activation="relu"))
+            model.add(tf.keras.layers.Dense(2))
         else:
             print("n_type not recognized. exiting")
             exit(0)
 
+    # Filippo's input:
+    # - keras mask loss
+    # - batch normalization!
+    # - kernel regularization
+    # - multi-head
+    # - custom loss function
+    # - keras callback save best model
+    # - subset
+    # - be more patient (50 epochs or more)
     #
     # probability of feature in image: 'binary_crossentropy'
     #
@@ -64,9 +89,11 @@ def teach_network(n_type="label",bs=64, n_epochs=2,N=10,plot=True):
     #
     if n_type == "label":
         model.compile(loss="binary_crossentropy",
+#                      metrics=["accuracy"],
                       optimizer=tf.keras.optimizers.Adam())
     else:
         model.compile(loss="mse",
+ #                     metrics=[tf.keras.metrics.RootMeanSquaredError()],
                       optimizer=tf.keras.optimizers.Adam())
         
     model.summary()
@@ -74,34 +101,22 @@ def teach_network(n_type="label",bs=64, n_epochs=2,N=10,plot=True):
     history = model.fit(dataset,
                         batch_size=bs,
                         validation_data=validation_dataset,
-                        epochs=n_epochs)
+                        epochs=n_epochs
+#                        callbacks= [tf.keras.callbacks.TensorBoard(log_dir="log",histogram_freq=1)]
+    )
 
-    model.save("model/%s"%(n_type))
+    model.save("model3/%s"%(n_type))
 
-    if plot:
-        n_input=len(validation_dataset)
-        for i in range(n_input):
-            im,sc=validation_dataset[i]
-            pr=model.predict(im)
-            for j in range(bs):
-                print(pr[j,:])
-                plt.imshow(im[j,:,:])
-                if n_type == "f_scale" or n_type == "e_scale":
-                    plt.axvline(pr[j,0],color="red")
-                    plt.axhline(pr[j,1],color="red")
-                if n_type == "label":
-                    label_str=""
-                    if pr[j,0]> 0.8:
-                        label_str+="F "
-                    if pr[j,1]> 0.8:
-                        label_str+="E "
-                    plt.title(label_str)
-                plt.show()
+teach_network(n_type="label",bs=32, n_epochs=5, N=10)    
             
 # three networks to solve all problems
 # 1) determine the presence of F and E traces
-teach_network(n_type="label",bs=64, n_epochs=10, N=20,plot=False)
+teach_network(n_type="f_scale",bs=32, n_epochs=5,N=10)
+
+
 # 2) scale f-region trace h'f and fof2
-teach_network(n_type="f_scale",bs=32, n_epochs=20,N=20,plot=False)
+
 # 3) scale e-region trace h'e and fe
-teach_network(n_type="e_scale",bs=32, n_epochs=20,N=20,plot=False)
+teach_network(n_type="e_scale",bs=32, n_epochs=5,N=10)
+
+

@@ -64,6 +64,8 @@ class random_shift_data(tf.keras.utils.Sequence):
     
 def get_images(dirname="./sod_ski",region="all",prob=False):
     fl=glob.glob("%s/iono*.png"%(dirname))
+    fl.sort()
+    n.random.seed(42)
     n.random.shuffle(fl)
 #    print(len(fl))
     imgs=[]
@@ -126,6 +128,8 @@ def get_ionogram_data(dirname="./sod_ski",bs=64,N=10,x_width=50,shift=True,fr0=0
                       prob=False,
                       region="all"):
     im,sc=get_images(dirname=dirname,region=region,prob=prob)
+    n_images=im.shape[0]
+    print("Total number of images %d"%(n_images))
     return(random_shift_data(im,sc,batch_size=bs,N=N,x_width=x_width,shift=shift,fr0=fr0,fr1=fr1,prob=prob))
 
 if __name__ == "__main__":
